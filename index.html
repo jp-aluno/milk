@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Milkdrop Debug Lab - Dropdown + Drag&Drop</title>
+<title>Milkdrop Debug Lab - Dropdown + Drag&Drop Fixed</title>
 
 <style>
 body{
@@ -56,7 +56,7 @@ canvas{
     <option value="">-- Select Server Preset --</option>
 </select>
 <button id="reload">Reload Current</button>
-<div id="dropHint">Drag & drop .milk file here</div>
+<div id="dropHint">Drag & drop .milk file anywhere</div>
 <div id="log"></div>
 </div>
 
@@ -64,8 +64,10 @@ canvas{
 
 <script type="module">
 import butterchurn from "https://cdn.skypack.dev/butterchurn";
-// Import server-hosted presets (download butterchurn-presets/presets/all.js to your server)
-import * as Presets from './butterchurn-presets/presets/all.js';
+// Updated paths: files are in root, next to index.html
+import * as AllPresets from './all.js';
+import * as BasePresets from './base.js';
+import * as MinimalPresets from './minimal.js';
 
 const canvas = document.getElementById("canvas");
 const logBox = document.getElementById("log");
@@ -80,7 +82,7 @@ const visualizer = butterchurn.createVisualizer(audioCtx, canvas, {
 });
 visualizer.connectAudio(analyser);
 
-// Dummy oscillator to generate audio
+// Dummy oscillator
 const osc = audioCtx.createOscillator();
 osc.connect(analyser);
 osc.start();
@@ -91,7 +93,10 @@ function log(msg){
     console.log(msg);
 }
 
-// Populate dropdown with server presets
+// Merge all presets into one object
+const Presets = {...AllPresets, ...BasePresets, ...MinimalPresets};
+
+// Populate dropdown
 Object.keys(Presets).forEach(name => {
     const opt = document.createElement('option');
     opt.value = name;
@@ -99,11 +104,11 @@ Object.keys(Presets).forEach(name => {
     dropdown.appendChild(opt);
 });
 
-// Load preset from dropdown or drag/drop
-function loadPreset(preset){
+// Load a preset object into visualizer
+function loadPreset(presetObj, name){
     try {
-        visualizer.loadPreset(preset, 0);
-        log("Loaded preset: " + (preset.name || "unknown"));
+        visualizer.loadPreset(presetObj, 0);
+        log("Loaded preset: " + (name || "unknown"));
     } catch(e){
         log("Error loading preset: " + e);
         console.error(e);
@@ -114,7 +119,7 @@ function loadPreset(preset){
 dropdown.addEventListener('change', e => {
     const name = e.target.value;
     if(name && Presets[name]){
-        loadPreset(Presets[name]);
+        loadPreset(Presets[name], name);
     }
 });
 
@@ -122,11 +127,11 @@ dropdown.addEventListener('change', e => {
 document.getElementById("reload").addEventListener('click', () => {
     const name = dropdown.value;
     if(name && Presets[name]){
-        loadPreset(Presets[name]);
+        loadPreset(Presets[name], name);
     }
 });
 
-// Drag-and-drop support for .milk files
+// Handle drag-and-drop of .milk files
 function handleFile(file){
     const reader = new FileReader();
     reader.onload = () => {
@@ -143,9 +148,16 @@ function handleFile(file){
     reader.readAsText(file);
 }
 
-document.addEventListener('dragover', e => e.preventDefault());
+// Prevent default drag behaviors everywhere
+['dragenter','dragover','dragleave','drop'].forEach(eventName => {
+    document.addEventListener(eventName, e => {
+        e.preventDefault();
+        e.stopPropagation();
+    });
+});
+
+// Drop handler
 document.addEventListener('drop', e => {
-    e.preventDefault();
     if(e.dataTransfer.files.length > 0){
         const file = e.dataTransfer.files[0];
         if(file.name.endsWith('.milk')){
@@ -159,7 +171,6 @@ document.addEventListener('drop', e => {
 // Render loop with FPS logging
 let last = performance.now();
 let frames = 0;
-
 function render(){
     requestAnimationFrame(render);
     try { visualizer.render(); } catch(e){ console.error(e); }
