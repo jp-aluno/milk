@@ -1,9 +1,8 @@
-<!-- milkdrop-lab.html -->
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Milkdrop Preset Lab</title>
+<title>Milkdrop Preset Lab - Debug Version</title>
 
 <style>
 body{
@@ -25,7 +24,7 @@ body{
 }
 
 #log{
-    height:120px;
+    height:160px;
     overflow:auto;
     border:1px solid #222;
     background:#050505;
@@ -41,6 +40,8 @@ body{
     color:#00ff9c;
     border:1px solid #222;
     margin-top:6px;
+    font-family:monospace;
+    font-size:12px;
 }
 
 button{
@@ -61,17 +62,11 @@ canvas{
 <body>
 
 <div id="ui">
-
 <input type="file" id="file" accept=".milk">
-
 <button id="reload">reload</button>
-
 <span id="fps">FPS: 0</span>
-
 <textarea id="editor" placeholder="Preset text appears here..."></textarea>
-
 <div id="log"></div>
-
 </div>
 
 <canvas id="canvas"></canvas>
@@ -86,17 +81,18 @@ const logBox = document.getElementById("log");
 const editor = document.getElementById("editor");
 const fpsLabel = document.getElementById("fps");
 
+console.log("Initializing AudioContext...");
 const audioCtx = new AudioContext();
 const analyser = audioCtx.createAnalyser();
 
+console.log("Creating Butterchurn visualizer...");
 const visualizer = butterchurn.createVisualizer(audioCtx, canvas, {
     width: window.innerWidth,
     height: window.innerHeight
 });
-
 visualizer.connectAudio(analyser);
 
-// dummy oscillator to feed audio input so visualizer runs
+console.log("Starting dummy oscillator for audio input...");
 const osc = audioCtx.createOscillator();
 osc.connect(analyser);
 osc.start();
@@ -104,29 +100,48 @@ osc.start();
 function log(msg){
     logBox.innerHTML += msg + "<br>";
     logBox.scrollTop = logBox.scrollHeight;
+    console.log(msg);
 }
 
+// Load preset with converter fallback
 function loadPreset(text){
+    console.log("Loading preset...");
+    let preset;
     try{
-        const preset = converter(text);   // default export
-        visualizer.loadPreset(preset,0);
-        log("Preset loaded");
-    }catch(e){
-        log("ERROR: "+e);
+        console.log("Attempting to convert preset with milkdrop-preset-converter...");
+        preset = converter(text);   // default export
+        console.log("Conversion successful.");
+    } catch(e) {
+        console.warn("Converter failed, loading raw preset text. Error:", e);
+        preset = text;
+    }
+
+    try {
+        visualizer.loadPreset(preset, 0);
+        log("Preset loaded into visualizer.");
+    } catch(e) {
+        console.error("Failed to load preset into visualizer:", e);
+        log("ERROR loading preset: " + e);
     }
 }
 
 document.getElementById("file").addEventListener("change", async e => {
+    console.log("File input changed...");
     const file = e.target.files[0];
-    if(!file) return;
+    if(!file){
+        console.warn("No file selected.");
+        return;
+    }
 
+    console.log("Reading file:", file.name);
     const text = await file.text();
     editor.value = text;
-
+    console.log("File read successfully. Length:", text.length);
     loadPreset(text);
 });
 
 document.getElementById("reload").onclick = () => {
+    console.log("Reload button clicked.");
     loadPreset(editor.value);
 };
 
@@ -135,17 +150,33 @@ let frames = 0;
 
 function render(){
     requestAnimationFrame(render);
-    visualizer.render();
+
+    try {
+        visualizer.render();
+    } catch(e) {
+        console.error("Error during visualizer.render():", e);
+    }
+
     frames++;
+
     const now = performance.now();
-    if(now-last>1000){
-        fpsLabel.textContent = "FPS: "+frames;
+    if(now - last > 1000){
+        fpsLabel.textContent = "FPS: " + frames;
+        console.log("FPS:", frames);
         frames=0;
         last=now;
     }
 }
 
+console.log("Starting render loop...");
 render();
+
+window.addEventListener('resize', () => {
+    console.log("Window resized:", window.innerWidth, window.innerHeight);
+    visualizer.resize(window.innerWidth, window.innerHeight);
+});
+
+console.log("Milkdrop Debug Lab initialized.");
 
 </script>
 
