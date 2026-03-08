@@ -2,20 +2,53 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Milkdrop Debug Lab - Console Logging</title>
+<title>Milkdrop Loader</title>
+
 <style>
-body{margin:0; background:black; color:#00ff9c; font-family:monospace;}
-#ui{position:fixed; top:10px; left:10px; width:500px; background:#111; border:1px solid #333; padding:8px; z-index:10;}
-#log{height:120px; overflow:auto; border:1px solid #222; background:#050505; padding:5px; margin-top:6px; font-size:12px;}
-select, button, input{background:#000;color:#0f0;border:1px solid #333;padding:4px 6px;margin-right:4px;cursor:pointer;}
-canvas{width:100vw;height:100vh;}
+body{
+    margin:0;
+    background:black;
+    color:#00ff9c;
+    font-family:monospace;
+}
+
+#ui{
+    position:fixed;
+    top:10px;
+    left:10px;
+    background:#111;
+    border:1px solid #333;
+    padding:10px;
+    z-index:10;
+}
+
+#log{
+    margin-top:6px;
+    height:120px;
+    width:320px;
+    overflow:auto;
+    background:#050505;
+    border:1px solid #222;
+    font-size:12px;
+    padding:4px;
+}
+
+input{
+    background:black;
+    color:#00ff9c;
+    border:1px solid #333;
+}
+
+canvas{
+    width:100vw;
+    height:100vh;
+}
 </style>
 </head>
+
 <body>
 
 <div id="ui">
-<select id="presetDropdown"><option value="">-- Select Preset --</option></select>
-<button id="reload">Reload Current</button>
 <input type="file" id="fileInput" accept=".milk">
 <div id="log"></div>
 </div>
@@ -23,118 +56,113 @@ canvas{width:100vw;height:100vh;}
 <canvas id="canvas"></canvas>
 
 <script type="module">
-console.log("Starting Milkdrop Debug Lab...");
 
 import butterchurn from "https://cdn.skypack.dev/butterchurn";
-// Only use browser-ready preset files
-import * as AllPresets from './all.js';
-import * as MinimalPresets from './minimal.js';
 
-console.log("Imported presets:", AllPresets, MinimalPresets);
-
-const Presets = {...AllPresets, ...MinimalPresets};
+console.log("Starting Milkdrop Loader");
 
 const canvas = document.getElementById("canvas");
-const logBox = document.getElementById("log");
-const dropdown = document.getElementById("presetDropdown");
 const fileInput = document.getElementById("fileInput");
+const logBox = document.getElementById("log");
 
-console.log("Creating AudioContext...");
+function log(msg){
+    console.log(msg);
+    logBox.innerHTML += msg + "<br>";
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+log("Creating AudioContext");
+
 const audioCtx = new AudioContext();
 const analyser = audioCtx.createAnalyser();
 
-console.log("Creating Butterchurn visualizer...");
-const visualizer = butterchurn.createVisualizer(audioCtx, canvas, {width: window.innerWidth, height: window.innerHeight});
+log("Creating Butterchurn visualizer");
+
+const visualizer = butterchurn.createVisualizer(audioCtx, canvas, {
+    width: window.innerWidth,
+    height: window.innerHeight
+});
+
 visualizer.connectAudio(analyser);
 
-console.log("Starting dummy oscillator...");
+log("Starting dummy oscillator");
+
 const osc = audioCtx.createOscillator();
+osc.type = "sawtooth";
+osc.frequency.value = 220;
 osc.connect(analyser);
 osc.start();
 
-function log(msg){
-    logBox.innerHTML += msg + "<br>";
-    logBox.scrollTop = logBox.scrollHeight;
-    console.log(msg);
-}
+fileInput.addEventListener("change", async e => {
 
-// Populate dropdown
-Object.keys(Presets).forEach(name => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    dropdown.appendChild(opt);
-});
-console.log("Dropdown populated with presets:", Object.keys(Presets));
+    console.log("File selected");
 
-// Load preset helper
-function loadPreset(presetObj, name){
-    console.log("Loading preset:", name);
-    try{
-        visualizer.loadPreset(presetObj, 0);
-        log("Loaded preset: " + (name || "unknown"));
-    } catch(e){
-        console.error("Error loading preset:", e);
-        log("Error loading preset: " + e);
-    }
-}
-
-// Dropdown event
-dropdown.addEventListener('change', e => {
-    const name = e.target.value;
-    if(name && Presets[name]){
-        loadPreset(Presets[name], name);
-    }
-});
-
-// Reload button
-document.getElementById("reload").addEventListener('click', () => {
-    const name = dropdown.value;
-    if(name && Presets[name]){
-        loadPreset(Presets[name], name);
-    }
-});
-
-// File input for .milk
-fileInput.addEventListener('change', async e => {
-    console.log("File input changed:", e.target.files);
     const file = e.target.files[0];
-    if(!file) return;
-    if(!file.name.endsWith('.milk')){
-        log("Not a .milk file: " + file.name);
+    if(!file){
+        log("No file selected");
         return;
     }
+
+    log("Loading file: " + file.name);
+
     const text = await file.text();
-    console.log("Loaded .milk text length:", text.length);
-    const preset = { preset: text };
-    loadPreset(preset, file.name);
+
+    console.log("Preset length:", text.length);
+
+    const preset = {
+        preset: text
+    };
+
+    try{
+        visualizer.loadPreset(preset, 0);
+        log("Preset loaded");
+    }
+    catch(err){
+        console.error(err);
+        log("ERROR loading preset");
+    }
+
 });
 
-// Render loop
 let last = performance.now();
 let frames = 0;
+
 function render(){
+
     requestAnimationFrame(render);
-    try { visualizer.render(); } catch(e){ console.error(e); }
+
+    try{
+        visualizer.render();
+    }catch(e){
+        console.error(e);
+    }
+
     frames++;
+
     const now = performance.now();
+
     if(now - last > 1000){
         log("FPS: " + frames);
-        console.log("FPS:", frames);
-        frames=0;
-        last=now;
+        frames = 0;
+        last = now;
     }
 }
-console.log("Starting render loop...");
+
 render();
 
-// Resize
-window.addEventListener('resize', () => {
-    console.log("Window resized:", window.innerWidth, window.innerHeight);
-    visualizer.resize(window.innerWidth, window.innerHeight);
+window.addEventListener("resize", () => {
+
+    console.log("Resize", window.innerWidth, window.innerHeight);
+
+    visualizer.resize(
+        window.innerWidth,
+        window.innerHeight
+    );
+
 });
 
-log("Milkdrop Debug Lab initialized.");
+log("Ready. Load a .milk preset.");
+
 </script>
 
 </body>
